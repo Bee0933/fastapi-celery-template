@@ -1,0 +1,88 @@
+version: "3.7"
+services:
+  
+  redis:
+    container_name: redis
+    hostname: redis
+    image: redis:latest
+    expose:
+      - 6379
+    networks:
+      - confluent
+
+  celery_worker_1:
+    container_name: celery_worker_1
+    hostname: celery_worker_1
+    build: './celery'
+    command: celery -A celery_worker.celery worker --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+    user: nobody
+    links:
+      - redis
+    depends_on:
+      - api
+      - redis
+    networks:
+      - confluent
+  
+
+  celery_worker_2:
+    container_name: celery_worker_2
+    hostname: celery_worker_2
+    build: './celery'
+    command: celery -A celery_worker.celery worker --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+    user: nobody
+    links:
+      - redis
+    depends_on:
+      - api
+      - redis
+    networks:
+      - confluent
+
+  api:
+    container_name: api
+    hostname: api
+    build:
+      context: ./api
+    ports:
+      - "9000:9000"
+    environment:
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - API_SERVER_HOST=${API_SERVER_HOST}
+      - API_SERVER_PORT=${API_SERVER_PORT}
+    restart: always
+    links:
+      - redis
+    networks:
+      - confluent
+
+  flower:
+    container_name: flower
+    hostname: flower
+    image: mher/flower:master
+    command: celery -A celery flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+    links:
+      - redis
+    depends_on:
+      - redis
+      - celery_worker_1
+      - celery_worker_2
+    networks:
+      - confluent
+
+networks:
+  confluent:
+    name: confluent
+    driver: bridge
